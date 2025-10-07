@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import warnings
+import os
 
 # --- 1. Configuración de la Página y Carga de Datos ---
-# Configura el título, ícono y layout de la página de Streamlit.
 st.set_page_config(
     page_title="Análisis por Segmento de Vehículos",
     page_icon="📊",
@@ -13,7 +13,6 @@ st.set_page_config(
 
 warnings.filterwarnings('ignore')
 
-# Usa el caché de Streamlit para no tener que cargar y limpiar los datos cada vez que se cambia un filtro.
 @st.cache_data
 def load_and_clean_data(uploaded_file):
     """
@@ -21,13 +20,14 @@ def load_and_clean_data(uploaded_file):
     """
     try:
         df = pd.read_csv(uploaded_file)
-        # Limpieza de la columna 'value'
-        df['value'] = df['value'].astype(str).str.replace('.', '', regex=False)
+        # Limpieza específica y robusta
+        df['value'] = df['value'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
         df['value'] = pd.to_numeric(df['value'], errors='coerce')
         df['value'].fillna(0, inplace=True)
-        # Limpieza de columnas categóricas y de año
-        df['parameter'] = df['parameter'].astype(str)
-        df['mode'] = df['mode'].astype(str)
+        
+        for col in ['parameter', 'mode', 'region', 'powertrain']:
+             df[col] = df[col].astype(str)
+
         df['year'] = pd.to_numeric(df['year'], errors='coerce')
         df.dropna(subset=['year'], inplace=True)
         df['year'] = df['year'].astype(int)
@@ -53,12 +53,11 @@ def page_segment_trends(df):
 
     st.subheader("Visión General: Crecimiento de cada Segmento en el Mundo")
     
-    # Filtra los datos para la métrica seleccionada a nivel mundial y por segmento
     segment_data = df[
         (df['region'] == 'World') &
         (df['parameter'] == metric) &
         (df['powertrain'] == 'EV') &
-        (df['mode'] != 'EV') # Excluir valores genéricos
+        (df['mode'] != 'EV')
     ].groupby(['year', 'mode'])['value'].sum().reset_index()
 
     if not segment_data.empty:
@@ -77,7 +76,6 @@ def page_regional_comparison(df):
     st.header("🌍 Comparativa Regional por Segmento")
     st.markdown("Selecciona un segmento de vehículo y descubre qué regiones son líderes en el mercado.")
 
-    # El usuario primero elige el segmento
     segments = sorted([m for m in df['mode'].unique() if m != 'EV'])
     selected_segment = st.selectbox("Selecciona un Segmento de Vehículo", options=segments)
 
@@ -89,7 +87,6 @@ def page_regional_comparison(df):
 
     st.subheader(f"Visión General: Top 15 Regiones para el Segmento '{selected_segment}'")
     
-    # Filtra por el segmento y métrica seleccionados
     regional_data = df[
         (df['mode'] == selected_segment) &
         (df['parameter'] == metric) &
@@ -122,12 +119,11 @@ def page_market_composition(df):
         "Selecciona un Año para el Análisis",
         min_value=int(df['year'].min()),
         max_value=int(df['year'].max()),
-        value=int(df['year'].max()) - 1
+        value=int(df['year'].max()) - 1 if int(df['year'].max()) > int(df['year'].min()) else int(df['year'].min())
     )
 
     st.subheader(f"Visión General: Composición del Mercado Mundial por Segmento en {year}")
 
-    # Filtra por año, métrica y agrupa por segmento
     composition_data = df[
         (df['year'] == year) &
         (df['parameter'] == metric) &
@@ -150,9 +146,9 @@ def main():
     """
     Función principal que organiza la interfaz de usuario y la navegación entre páginas.
     """
-    st.sidebar.title("Panel de Control 🚗")
+    st.sidebar.title("Panel de Control 📊")
     
-    uploaded_file = st.sidebar.file_uploader("Sube tu archivo CSV", type=["csv"])
+    uploaded_file = st.sidebar.file_uploader("Sube tu archivo CSV de datos", type=["csv"])
 
     if uploaded_file is None:
         st.title("Bienvenido al Analizador de Datos por Segmento")
