@@ -1,36 +1,33 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import warnings
 
-# --- Page Configuration ---
+# --- 1. Configuración de la Página y Carga de Datos ---
+# Configura el título, ícono y layout de la página de Streamlit.
 st.set_page_config(
-    page_title="Dashboard Multi-Página de EVs",
-    page_icon="🚗",
+    page_title="Análisis por Segmento de Vehículos",
+    page_icon="📊",
     layout="wide",
 )
 
 warnings.filterwarnings('ignore')
 
-# --- Cached Data Loading and Cleaning ---
+# Usa el caché de Streamlit para no tener que cargar y limpiar los datos cada vez que se cambia un filtro.
 @st.cache_data
 def load_and_clean_data(uploaded_file):
     """
-    Loads and cleans data from an uploaded file. Results are cached.
+    Carga y limpia los datos desde un archivo CSV subido por el usuario.
     """
     try:
         df = pd.read_csv(uploaded_file)
+        # Limpieza de la columna 'value'
         df['value'] = df['value'].astype(str).str.replace('.', '', regex=False)
         df['value'] = pd.to_numeric(df['value'], errors='coerce')
-        
-        # --- CORRECCIÓN APLICADA AQUÍ ---
-        # 1. Rellenar con 0 únicamente la columna 'value'.
         df['value'].fillna(0, inplace=True)
-        # 2. Asegurar que la columna 'parameter' sea siempre de tipo texto.
+        # Limpieza de columnas categóricas y de año
         df['parameter'] = df['parameter'].astype(str)
-        # La línea problemática anterior era: df.fillna(0, inplace=True)
-
+        df['mode'] = df['mode'].astype(str)
         df['year'] = pd.to_numeric(df['year'], errors='coerce')
         df.dropna(subset=['year'], inplace=True)
         df['year'] = df['year'].astype(int)
@@ -39,186 +36,147 @@ def load_and_clean_data(uploaded_file):
         st.error(f"Error al procesar el archivo: {e}")
         return pd.DataFrame()
 
-# --- Page 1: Análisis de Tendencias Temporales ---
-def page_trends(df):
-    st.header("📈 Análisis de Tendencias Temporales")
-    st.markdown("Esta sección muestra cómo han evolucionado las métricas a lo largo del tiempo.")
+# --- 2. Páginas de Análisis ---
+
+def page_segment_trends(df):
+    """
+    Página para analizar las tendencias de diferentes segmentos de vehículos a lo largo del tiempo.
+    """
+    st.header("📈 Tendencias por Segmento de Vehículo")
+    st.markdown("Observa cómo ha crecido cada segmento de vehículo (Coches, Buses, Furgonetas) a nivel mundial.")
 
     metric = st.selectbox(
-        "Selecciona la Métrica de Tendencia",
+        "Selecciona la Métrica",
         options=sorted(df['parameter'].unique()),
         key='trends_metric'
     )
 
-    st.subheader("Visión General: Tendencia Mundial")
-    world_data = df[(df['region'] == 'World') & (df['parameter'] == metric) & (df['powertrain'] == 'EV')].groupby('year')['value'].sum()
-    if not world_data.empty:
-        fig_world = px.line(world_data, x=world_data.index, y='value', title=f"Tendencia Mundial de '{metric}'", markers=True)
-        st.plotly_chart(fig_world, use_container_width=True)
+    st.subheader("Visión General: Crecimiento de cada Segmento en el Mundo")
+    
+    # Filtra los datos para la métrica seleccionada a nivel mundial y por segmento
+    segment_data = df[
+        (df['region'] == 'World') &
+        (df['parameter'] == metric) &
+        (df['powertrain'] == 'EV') &
+        (df['mode'] != 'EV') # Excluir valores genéricos
+    ].groupby(['year', 'mode'])['value'].sum().reset_index()
+
+    if not segment_data.empty:
+        fig = px.line(segment_data, x='year', y='value', color='mode',
+                      title=f"Tendencia Mundial de '{metric}' por Segmento de Vehículo",
+                      labels={'year': 'Año', 'value': 'Valor', 'mode': 'Segmento'},
+                      markers=True)
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning("No hay datos mundiales para la métrica seleccionada.")
+        st.warning("No hay datos mundiales disponibles para esta métrica y segmentos.")
 
-    with st.expander("🔍 Exploración Detallada por Región"):
-        st.markdown("Selecciona una o varias regiones para comparar sus tendencias.")
-        regions = sorted([r for r in df['region'].unique() if r != 'World'])
-        selected_regions = st.multiselect("Selecciona Regiones", options=regions, default=regions[:3])
+def page_regional_comparison(df):
+    """
+    Página para comparar el rendimiento de las regiones dentro de un segmento específico.
+    """
+    st.header("🌍 Comparativa Regional por Segmento")
+    st.markdown("Selecciona un segmento de vehículo y descubre qué regiones son líderes en el mercado.")
 
-        if selected_regions:
-            detailed_data = df[
-                (df['region'].isin(selected_regions)) &
-                (df['parameter'] == metric) &
-                (df['powertrain'] == 'EV')
-            ].groupby(['year', 'region'])['value'].sum().reset_index()
-            
-            fig_detailed = px.line(detailed_data, x='year', y='value', color='region', title=f"Tendencia de '{metric}' por Región", markers=True)
-            st.plotly_chart(fig_detailed, use_container_width=True)
-
-# --- Page 2: Comparativa Entre Regiones ---
-def page_comparison(df):
-    st.header("🌍 Comparativa Regional")
-    st.markdown("Compara el rendimiento de diferentes regiones en un año específico.")
+    # El usuario primero elige el segmento
+    segments = sorted([m for m in df['mode'].unique() if m != 'EV'])
+    selected_segment = st.selectbox("Selecciona un Segmento de Vehículo", options=segments)
 
     metric = st.selectbox(
-        "Selecciona la Métrica de Comparación",
+        "Selecciona la Métrica",
         options=sorted(df['parameter'].unique()),
         key='comparison_metric'
     )
-    
-    year = st.slider(
-        "Selecciona un Año",
-        min_value=int(df['year'].min()),
-        max_value=int(df['year'].max()),
-        value=int(df['year'].max()) - 1,
-        key='comparison_year'
-    )
 
-    st.subheader(f"Visión General: Top 15 Regiones en {year}")
+    st.subheader(f"Visión General: Top 15 Regiones para el Segmento '{selected_segment}'")
     
-    general_data = df[
-        (df['year'] == year) &
+    # Filtra por el segmento y métrica seleccionados
+    regional_data = df[
+        (df['mode'] == selected_segment) &
         (df['parameter'] == metric) &
         (df['powertrain'] == 'EV') &
         (df['region'] != 'World')
     ].groupby('region')['value'].sum().nlargest(15).sort_values()
 
-    if not general_data.empty:
-        fig_general = px.bar(general_data, x='value', y=general_data.index, orientation='h', title=f"Top 15 Regiones por '{metric}' en {year}")
-        st.plotly_chart(fig_general, use_container_width=True)
+    if not regional_data.empty:
+        fig = px.bar(regional_data, x='value', y=regional_data.index, orientation='h',
+                     title=f"Top 15 Regiones por '{metric}' en el segmento '{selected_segment}' (Total Histórico)",
+                     labels={'value': 'Valor Total Acumulado', 'y': 'Región'})
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning(f"No hay datos para '{metric}' en {year}.")
-        
-    with st.expander("🔍 Análisis de Pareto (Principio 80/20)"):
-        st.markdown("Este gráfico identifica las regiones que contribuyen al 80% del total de la métrica, ayudando a enfocar los esfuerzos.")
-        pareto_data = df[
-            (df['year'] == year) &
-            (df['parameter'] == metric) &
-            (df['powertrain'] == 'EV') &
-            (df['region'] != 'World')
-        ].groupby('region')['value'].sum().sort_values(ascending=False).to_frame()
+        st.warning(f"No hay datos disponibles para el segmento '{selected_segment}' con la métrica seleccionada.")
 
-        if not pareto_data.empty:
-            pareto_data['cumulative_perc'] = 100 * pareto_data['value'].cumsum() / pareto_data['value'].sum()
-            fig_pareto = go.Figure()
-            fig_pareto.add_trace(go.Bar(x=pareto_data.index, y=pareto_data['value'], name=metric))
-            fig_pareto.add_trace(go.Scatter(x=pareto_data.index, y=pareto_data['cumulative_perc'], name='Porcentaje Acumulado', yaxis='y2', mode='lines+markers'))
-            fig_pareto.update_layout(title=f'Análisis de Pareto para "{metric}" en {year}', yaxis2=dict(title='Porcentaje Acumulado (%)', overlaying='y', side='right', range=[0, 100]))
-            st.plotly_chart(fig_pareto, use_container_width=True)
-
-# --- Page 3: Composición del Mercado ---
-def page_composition(df):
+def page_market_composition(df):
+    """
+    Página para analizar la composición del mercado, enfocada en segmentos.
+    """
     st.header("📊 Composición del Mercado")
-    st.markdown("Analiza la distribución del mercado por tipo de vehículo y tecnología.")
+    st.markdown("Entiende qué porcentaje del mercado representa cada segmento de vehículo.")
 
     metric = st.selectbox(
-        "Selecciona la Métrica de Composición",
-        options=[p for p in sorted(df['parameter'].unique()) if 'share' not in p], # Filter out share metrics for value-based composition
+        "Selecciona la Métrica",
+        options=[p for p in sorted(df['parameter'].unique()) if 'share' not in p],
         key='composition_metric'
     )
 
     year = st.slider(
-        "Selecciona un Año",
+        "Selecciona un Año para el Análisis",
         min_value=int(df['year'].min()),
         max_value=int(df['year'].max()),
-        value=int(df['year'].max()) - 1,
-        key='composition_year'
+        value=int(df['year'].max()) - 1
     )
-    
-    st.subheader(f"Visión General: Composición Mundial en {year}")
-    
-    world_composition = df[
+
+    st.subheader(f"Visión General: Composición del Mercado Mundial por Segmento en {year}")
+
+    # Filtra por año, métrica y agrupa por segmento
+    composition_data = df[
         (df['year'] == year) &
         (df['parameter'] == metric) &
         (df['region'] == 'World') &
-        (df['powertrain'].isin(['BEV', 'PHEV']))
-    ]
+        (df['powertrain'] == 'EV') &
+        (df['mode'] != 'EV')
+    ].groupby('mode')['value'].sum()
 
-    if not world_composition.empty:
-        fig_sunburst = px.sunburst(world_composition, path=['mode', 'powertrain'], values='value', title=f'Composición Jerárquica del Mercado Mundial ({metric}, {year})')
-        st.plotly_chart(fig_sunburst, use_container_width=True)
+    if not composition_data.empty:
+        fig = px.pie(composition_data, names=composition_data.index, values='value',
+                     title=f"Distribución del Mercado Mundial por Segmento ({metric}, {year})",
+                     hole=0.3)
+        fig.update_traces(textinfo='percent+label')
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning(f"No hay datos de composición mundial para '{metric}' en {year}.")
-        
-    with st.expander("🔍 Exploración Detallada por Región"):
-        st.markdown("Selecciona una región para ver su composición de mercado específica.")
-        regions = sorted([r for r in df['region'].unique() if r != 'World'])
-        selected_region = st.selectbox("Selecciona una Región", options=regions, index=regions.index('USA'))
+        st.warning(f"No hay datos de composición mundial para el año {year}.")
 
-        if selected_region:
-            region_composition = df[
-                (df['year'] == year) &
-                (df['parameter'] == metric) &
-                (df['region'] == selected_region) &
-                (df['powertrain'].isin(['BEV', 'PHEV']))
-            ].groupby('powertrain')['value'].sum()
-
-            if not region_composition.empty:
-                fig_pie = px.pie(region_composition, names=region_composition.index, values='value', title=f"Distribución BEV vs. PHEV en {selected_region} ({metric}, {year})")
-                st.plotly_chart(fig_pie, use_container_width=True)
-            else:
-                 st.warning(f"No hay datos de composición para '{selected_region}' en {year}.")
-
-
-# --- Main Application Logic ---
+# --- 3. Lógica Principal de la Aplicación ---
 def main():
-    st.sidebar.title("Navegación del Dashboard")
+    """
+    Función principal que organiza la interfaz de usuario y la navegación entre páginas.
+    """
+    st.sidebar.title("Panel de Control 🚗")
     
-    # --- 1. File Uploader ---
-    uploaded_file = st.sidebar.file_uploader(
-        "Sube tu archivo CSV",
-        type=["csv"]
-    )
+    uploaded_file = st.sidebar.file_uploader("Sube tu archivo CSV", type=["csv"])
 
     if uploaded_file is None:
-        st.title("Bienvenido al Analizador de Datos de Vehículos Eléctricos 🚗")
-        st.info("👈 Por favor, sube un archivo CSV para comenzar.")
-        st.markdown("""
-        Esta aplicación te permite explorar datos sobre el mercado de EVs a través de diferentes análisis.
-        - **Análisis de Tendencias:** Observa el crecimiento a lo largo del tiempo.
-        - **Comparativa Regional:** Compara el rendimiento entre países.
-        - **Composición del Mercado:** Entiende la cuota de cada tipo de vehículo.
-        
-        Sube tu archivo para habilitar el menú de navegación y comenzar el análisis.
-        """)
+        st.title("Bienvenido al Analizador de Datos por Segmento")
+        st.info("👈 Por favor, sube un archivo CSV para comenzar el análisis.")
         return
 
     df = load_and_clean_data(uploaded_file)
     if df.empty:
         return
 
-    # --- Page Selector ---
-    page = st.sidebar.radio("Selecciona una página de análisis", 
-                            ["Análisis de Tendencias", "Comparativa Regional", "Composición del Mercado"])
+    page = st.sidebar.radio(
+        "Selecciona una página de análisis",
+        ["Tendencias por Segmento", "Comparativa Regional", "Composición del Mercado"]
+    )
     
     st.sidebar.markdown("---")
-    st.sidebar.markdown("Creado con Streamlit y Plotly.")
+    st.sidebar.info("Esta aplicación te permite analizar el mercado de Vehículos Eléctricos, enfocándose en los diferentes segmentos como coches, buses y camiones.")
 
-    # --- Page Routing ---
-    if page == "Análisis de Tendencias":
-        page_trends(df)
+    if page == "Tendencias por Segmento":
+        page_segment_trends(df)
     elif page == "Comparativa Regional":
-        page_comparison(df)
+        page_regional_comparison(df)
     elif page == "Composición del Mercado":
-        page_composition(df)
+        page_market_composition(df)
 
 if __name__ == "__main__":
     main()
