@@ -84,12 +84,14 @@ def run_analyzer():
 def get_gemini_response(question, chat_history):
     """Obtiene una respuesta del modelo Gemini."""
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        # CORRECCIÓN: Usar un nombre de modelo actualizado. 'gemini-pro' está obsoleto en algunas APIs.
+        # 'gemini-1.5-flash-latest' es una opción moderna, rápida y eficiente.
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         chat = model.start_chat(history=chat_history)
         response = chat.send_message(question)
         return response.text
     except Exception as e:
-        return f"Ocurrió un error: {e}"
+        return f"Ocurrió un error al contactar la API de Gemini: {e}"
 
 def run_chatbot():
     """Ejecuta la lógica completa del Chatbot."""
@@ -98,12 +100,17 @@ def run_chatbot():
     
     # Configuración de la API Key desde Streamlit Secrets
     try:
+        # Asegurarse de que la clave de API está en st.secrets
+        if "GEMINI_API_KEY" not in st.secrets:
+            st.error("🔑 La API Key de Gemini no está configurada. Añádela a tus secretos de Streamlit.")
+            st.code("GEMINI_API_KEY = 'TU_API_KEY'")
+            return
+
         api_key = st.secrets["GEMINI_API_KEY"]
         genai.configure(api_key=api_key)
-        api_key_configured = True
-    except (KeyError, AttributeError):
-        st.error("🔑 La API Key de Gemini no está configurada en los secretos de Streamlit.")
-        api_key_configured = False
+
+    except Exception as e:
+        st.error(f"Error al configurar la API Key: {e}")
         return
 
     # Lógica del historial de chat
