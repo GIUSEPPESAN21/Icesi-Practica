@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import google.generativeai as genai
 import warnings
 import os
+from gemini_utils import GeminiUtils # <-- 1. Importamos tu clase
 
 # --- 1. Configuración General de la Página ---
 st.set_page_config(
@@ -79,60 +79,19 @@ def run_analyzer():
     elif page == "Comparativa Regional": page_regional_comparison(df)
     elif page == "Composición del Mercado": page_market_composition(df)
 
-# --- 3. Lógica del Chatbot con Gemini ---
-
-def get_gemini_response(question, chat_history):
-    """
-    Obtiene una respuesta del modelo Gemini, probando una lista de modelos disponibles
-    para asegurar la robustez del servicio.
-    """
-    # Lista de modelos a probar, ordenados por preferencia (del más potente al más básico)
-    modelos_disponibles = [
-        "gemini-1.5-pro-latest",
-        "gemini-1.5-flash-latest",
-        "gemini-pro", # Modelo más antiguo, pero estable como fallback
-    ]
-    
-    last_error = None
-    
-    for model_name in modelos_disponibles:
-        try:
-            # Intenta inicializar el modelo
-            model = genai.GenerativeModel(model_name)
-            chat = model.start_chat(history=chat_history)
-            response = chat.send_message(question)
-            
-            # Si la respuesta es exitosa, la retornamos y salimos de la función
-            return response.text
-        
-        except Exception as e:
-            # Guarda el error para informarlo si todos los modelos fallan
-            last_error = e
-            # Opcional: Imprime en la consola del servidor para depuración
-            print(f"Advertencia: El modelo '{model_name}' no está disponible. Intentando con el siguiente. Error: {e}")
-            continue # Pasa al siguiente modelo de la lista
-            
-    # Si el bucle termina sin haber retornado una respuesta, significa que todos los modelos fallaron.
-    return f"Ocurrió un error al contactar la API de Gemini. Todos los modelos probados fallaron. Último error: {last_error}"
+# --- 3. Lógica del Chatbot con Gemini (AHORA USANDO GeminiUtils) ---
 
 def run_chatbot():
     """Ejecuta la lógica completa del Chatbot."""
     st.title("🤖 Chatbot con IA de Gemini")
     st.caption("Conversa con el modelo de IA de Google.")
     
-    # Configuración de la API Key desde Streamlit Secrets
     try:
-        # Asegurarse de que la clave de API está en st.secrets
-        if "GEMINI_API_KEY" not in st.secrets:
-            st.error("🔑 La API Key de Gemini no está configurada. Añádela a tus secretos de Streamlit.")
-            st.code("GEMINI_API_KEY = 'TU_API_KEY'")
-            return
-
-        api_key = st.secrets["GEMINI_API_KEY"]
-        genai.configure(api_key=api_key)
-
+        # <-- 2. Creamos una instancia de tu clase. Toda la configuración de la API ocurre aquí.
+        gemini = GeminiUtils()
     except Exception as e:
-        st.error(f"Error al configurar la API Key: {e}")
+        st.error(f"Error al inicializar la IA de Gemini: {e}")
+        st.error("Asegúrate de que tu `GEMINI_API_KEY` está configurada en los secretos de Streamlit.")
         return
 
     # Lógica del historial de chat
@@ -152,7 +111,11 @@ def run_chatbot():
             st.markdown(user_prompt)
 
         with st.spinner("Gemini está pensando..."):
-            response_text = get_gemini_response(user_prompt, st.session_state.chat_history)
+            # <-- 3. Usamos el método de tu clase para obtener la respuesta.
+            #     Creamos una conversación que soporta historial.
+            chat = gemini.model.start_chat(history=st.session_state.chat_history)
+            response = chat.send_message(user_prompt)
+            response_text = response.text
         
         st.session_state.chat_history.append({"role": "model", "parts": [response_text]})
         with st.chat_message("Gemini"):
