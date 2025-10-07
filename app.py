@@ -82,16 +82,38 @@ def run_analyzer():
 # --- 3. Lógica del Chatbot con Gemini ---
 
 def get_gemini_response(question, chat_history):
-    """Obtiene una respuesta del modelo Gemini."""
-    try:
-        # CORRECCIÓN: Usar un nombre de modelo actualizado. 'gemini-pro' está obsoleto en algunas APIs.
-        # 'gemini-1.5-flash-latest' es una opción moderna, rápida y eficiente.
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        chat = model.start_chat(history=chat_history)
-        response = chat.send_message(question)
-        return response.text
-    except Exception as e:
-        return f"Ocurrió un error al contactar la API de Gemini: {e}"
+    """
+    Obtiene una respuesta del modelo Gemini, probando una lista de modelos disponibles
+    para asegurar la robustez del servicio.
+    """
+    # Lista de modelos a probar, ordenados por preferencia (del más potente al más básico)
+    modelos_disponibles = [
+        "gemini-1.5-pro-latest",
+        "gemini-1.5-flash-latest",
+        "gemini-pro", # Modelo más antiguo, pero estable como fallback
+    ]
+    
+    last_error = None
+    
+    for model_name in modelos_disponibles:
+        try:
+            # Intenta inicializar el modelo
+            model = genai.GenerativeModel(model_name)
+            chat = model.start_chat(history=chat_history)
+            response = chat.send_message(question)
+            
+            # Si la respuesta es exitosa, la retornamos y salimos de la función
+            return response.text
+        
+        except Exception as e:
+            # Guarda el error para informarlo si todos los modelos fallan
+            last_error = e
+            # Opcional: Imprime en la consola del servidor para depuración
+            print(f"Advertencia: El modelo '{model_name}' no está disponible. Intentando con el siguiente. Error: {e}")
+            continue # Pasa al siguiente modelo de la lista
+            
+    # Si el bucle termina sin haber retornado una respuesta, significa que todos los modelos fallaron.
+    return f"Ocurrió un error al contactar la API de Gemini. Todos los modelos probados fallaron. Último error: {last_error}"
 
 def run_chatbot():
     """Ejecuta la lógica completa del Chatbot."""
