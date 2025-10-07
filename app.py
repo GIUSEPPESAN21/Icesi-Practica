@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import warnings
 import os
-from gemini_utils import GeminiUtils # <-- 1. Importamos tu clase
+from gemini_utils import GeminiUtils
 
 # --- 1. Configuración General de la Página ---
 st.set_page_config(
@@ -64,30 +64,25 @@ def page_market_composition(df):
     else:
         st.warning(f"No hay datos de composición para el año {year}.")
 
-def run_analyzer():
-    """Ejecuta la lógica completa del analizador de datos."""
-    st.sidebar.title("Panel del Analizador 📊")
-    uploaded_file = st.sidebar.file_uploader("Sube tu archivo CSV de datos", type=["csv"], key="analyzer_uploader")
-    if uploaded_file is None:
-        st.title("Bienvenido al Analizador de Datos")
-        st.info("👈 Sube un archivo CSV para comenzar.")
-        return
-    df = load_and_clean_data(uploaded_file)
-    if df.empty: return
+def run_analyzer(df):
+    """Ejecuta la lógica del analizador de datos usando un DataFrame."""
     page = st.sidebar.radio("Selecciona un análisis", ["Tendencias", "Comparativa Regional", "Composición del Mercado"])
     if page == "Tendencias": page_segment_trends(df)
     elif page == "Comparativa Regional": page_regional_comparison(df)
     elif page == "Composición del Mercado": page_market_composition(df)
 
-# --- 3. Lógica del Chatbot con Gemini (AHORA USANDO GeminiUtils) ---
+# --- 3. Lógica del Chatbot con Gemini ---
 
-def run_chatbot():
-    """Ejecuta la lógica completa del Chatbot."""
+def run_chatbot(df=None):
+    """Ejecuta la lógica del Chatbot, usando opcionalmente un DataFrame."""
     st.title("🤖 Chatbot con IA de Gemini")
-    st.caption("Conversa con el modelo de IA de Google.")
-    
+
+    if df is not None:
+        st.success("¡Datos cargados! Ahora puedes hacer preguntas sobre tu archivo.")
+    else:
+        st.info("Sube un archivo en la barra lateral para poder hacer preguntas sobre tus datos.")
+
     try:
-        # <-- 2. Creamos una instancia de tu clase. Toda la configuración de la API ocurre aquí.
         gemini = GeminiUtils()
     except Exception as e:
         st.error(f"Error al inicializar la IA de Gemini: {e}")
@@ -106,15 +101,29 @@ def run_chatbot():
     user_prompt = st.chat_input("Escribe tu pregunta aquí...")
 
     if user_prompt:
+        # Construir el prompt con contexto si hay datos
+        final_prompt = user_prompt
+        if df is not None:
+            data_context = df.head().to_markdown()
+            final_prompt = f"""
+            Eres un asistente de análisis de datos. Un usuario ha cargado un archivo CSV.
+            Aquí tienes un resumen de las primeras filas de los datos:
+            ---
+            {data_context}
+            ---
+            Basándote en estos datos, responde a la siguiente pregunta del usuario. 
+            Si la pregunta no se puede responder con los datos proporcionados, indícalo claramente.
+
+            Pregunta del usuario: "{user_prompt}"
+            """
+
         st.session_state.chat_history.append({"role": "user", "parts": [user_prompt]})
         with st.chat_message("Tú"):
             st.markdown(user_prompt)
 
         with st.spinner("Gemini está pensando..."):
-            # <-- 3. Usamos el método de tu clase para obtener la respuesta.
-            #     Creamos una conversación que soporta historial.
             chat = gemini.model.start_chat(history=st.session_state.chat_history)
-            response = chat.send_message(user_prompt)
+            response = chat.send_message(final_prompt)
             response_text = response.text
         
         st.session_state.chat_history.append({"role": "model", "parts": [response_text]})
@@ -124,15 +133,38 @@ def run_chatbot():
 # --- 4. Aplicación Principal (Router) ---
 def main():
     st.sidebar.title("Navegación Principal")
+
+    # Mover el cargador de archivos aquí para que sea global
+    uploaded_file = st.sidebar.file_uploader("Sube tu archivo CSV de datos", type=["csv"], key="main_uploader")
+    
+    if uploaded_file:
+        df = load_and_clean_data(uploaded_file)
+        st.session_state['df'] = df
+        st.session_state['data_loaded'] = True
+    else:
+        # Limpiar el estado si no hay archivo
+        if 'df' in st.session_state:
+            del st.session_state['df']
+        st.session_state['data_loaded'] = False
+
     app_choice = st.sidebar.radio(
         "Elige la aplicación",
         ["Analizador de Datos", "Chatbot con Gemini"]
     )
     
+    # Obtener el DataFrame desde el estado de la sesión si existe
+    df_from_session = st.session_state.get('df', None)
+
     if app_choice == "Analizador de Datos":
-        run_analyzer()
+        if df_from_session is not None:
+            run_analyzer(df_from_session)
+        else:
+            st.title("Bienvenido al Analizador de Datos")
+            st.info("👈 Sube un archivo CSV en la barra lateral para comenzar.")
+    
     elif app_choice == "Chatbot con Gemini":
-        run_chatbot()
+        run_chatbot(df_from_session)
+
 
 if __name__ == "__main__":
     main()
