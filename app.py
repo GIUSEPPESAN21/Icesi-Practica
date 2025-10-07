@@ -23,7 +23,14 @@ def load_and_clean_data(uploaded_file):
         df = pd.read_csv(uploaded_file)
         df['value'] = df['value'].astype(str).str.replace('.', '', regex=False)
         df['value'] = pd.to_numeric(df['value'], errors='coerce')
-        df.fillna(0, inplace=True)
+        
+        # --- CORRECCIÓN APLICADA AQUÍ ---
+        # 1. Rellenar con 0 únicamente la columna 'value'.
+        df['value'].fillna(0, inplace=True)
+        # 2. Asegurar que la columna 'parameter' sea siempre de tipo texto.
+        df['parameter'] = df['parameter'].astype(str)
+        # La línea problemática anterior era: df.fillna(0, inplace=True)
+
         df['year'] = pd.to_numeric(df['year'], errors='coerce')
         df.dropna(subset=['year'], inplace=True)
         df['year'] = df['year'].astype(int)
