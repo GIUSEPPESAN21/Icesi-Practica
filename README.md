@@ -1,51 +1,46 @@
-⚡ Dashboard de Análisis del Mercado de Vehículos Eléctricos
-Este proyecto presenta un dashboard interactivo construido con Streamlit para visualizar y analizar el mercado global de vehículos eléctricos (EVs). Los datos incluyen información histórica y proyecciones sobre el stock y las ventas de diferentes tipos de vehículos eléctricos por región.
+Dashboard de Análisis de EVs y Chatbot con Gemini
+Este repositorio contiene dos aplicaciones web construidas con Streamlit:
 
-🚀 Demo
-Puedes ver una demostración de la aplicación aquí: [Enlace a tu App de Streamlit Cloud - lo agregarás después del despliegue]
+Analizador de Datos de Vehículos Eléctricos (app.py): Una herramienta interactiva para visualizar y analizar datos del mercado de vehículos eléctricos por segmento.
 
-📋 Características
-Visualización de Tendencias: Gráficos de líneas interactivas que muestran la evolución histórica y las proyecciones futuras del stock y las ventas de EVs.
+Chatbot con Gemini (chatbot_app.py): Un chatbot conversacional que utiliza la potente IA de Gemini de Google.
 
-Filtros Dinámicos: Permite a los usuarios filtrar los datos por región y año para un análisis más granular.
+🚀 Cómo Empezar
+1. Prerrequisitos
+Python 3.8 o superior
 
-Análisis de Composición: Gráficos circulares que muestran la distribución entre vehículos 100% eléctricos (BEV) y híbridos enchufables (PHEV).
+Una clave de API de Google AI Studio para el chatbot.
 
-Explorador de Datos: Una tabla interactiva para ver el conjunto de datos crudos.
+2. Instalación
+Clona este repositorio y navega a la carpeta del proyecto. Luego, instala las dependencias:
 
-🛠️ Tecnologías Utilizadas
-Lenguaje: Python
-
-Librerías:
-
-Streamlit (para la aplicación web)
-
-Pandas (para la manipulación de datos)
-
-Matplotlib & Seaborn (para la visualización de datos)
-
-⚙️ Cómo Ejecutar el Proyecto Localmente
-Sigue estos pasos para ejecutar la aplicación en tu propia máquina.
-
-Prerrequisitos
-Tener Python 3.8+ instalado.
-
-Tener pip (el gestor de paquetes de Python) instalado.
-
-1. Clona el Repositorio
-git clone [https://github.com/TU_USUARIO/TU_REPOSITORIO.git](https://github.com/TU_USUARIO/TU_REPOSITORIO.git)
-cd TU_REPOSITORIO
-
-2. Crea un Entorno Virtual (Recomendado)
-python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-
-3. Instala las Dependencias
-Asegúrate de tener tu archivo requirements.txt en la carpeta.
-
+git clone [https://github.com/tu-usuario/tu-repositorio.git](https://github.com/tu-usuario/tu-repositorio.git)
+cd tu-repositorio
 pip install -r requirements.txt
 
-4. Ejecuta la Aplicación
+3. Configuración del Chatbot (Local)
+Para usar el chatbot, necesitas configurar tu clave de API de forma segura:
+
+Crea una carpeta llamada .streamlit en la raíz de tu proyecto.
+
+Dentro de .streamlit, crea un archivo llamado secrets.toml.
+
+Añade tu clave de API al archivo de la siguiente manera:
+
+# .streamlit/secrets.toml
+GEMINI_API_KEY = "PEGA_AQUÍ_TU_NUEVA_CLAVE_DE_GEMINI"
+
+IMPORTANTE: No subas este archivo a GitHub.
+
+🏃 Cómo Ejecutar las Aplicaciones
+Puedes ejecutar cualquiera de las dos aplicaciones desde tu terminal.
+
+Para lanzar el Analizador de Datos:
+Asegúrate de tener un archivo de datos (como Practica ICESI.csv) y ejecútalo. La aplicación te pedirá que lo subas.
+
 streamlit run app.py
 
-La aplicación debería abrirse automáticamente en tu navegador web.
+Para lanzar el Chatbot con Gemini:
+Asegúrate de haber configurado tu archivo secrets.toml.
+
+streamlit run chatbot_app.py
